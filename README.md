@@ -24,6 +24,6 @@ https://kbj2934.github.io/reverseGuGu/
 - 리액트 앱을 자바스크립트와 HTML로 똑같이 만들어줘.
 
 # 호스팅 과정
-## 1. 깃허브에 저장소 생성
-## 2. Settings - Pages에서 main 페이지 추가
-## 3. URL공개
+1. 깃허브에 저장소 생성
+2. Settings - Pages에서 main 페이지 추가
+3. URL공개
