@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>역 구구단</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* 애니메이션을 위한 CSS */
+        @keyframes fadeInDialog {
+            from { opacity: 0; transform: translateY(20px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .animate-fade-in-up {
+            animation: fadeInDialog 0.3s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-100 to-purple-200 flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div id="app-container" class="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full text-center border-4 border-blue-400 relative">
+        <h1 class="text-4xl font-extrabold text-blue-700 mb-6 drop-shadow-md">
+            역 구구단
+        </h1>
+
+        <div id="start-screen" class="flex flex-col items-center">
+            <p class="text-xl text-gray-700 mb-4">시간 제한을 선택하세요:</p>
+            <div class="flex flex-col space-y-4 lg:flex-row lg:space-y-0 lg:space-x-4">
+                <button id="start-5sec"
+                    class="bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-8 rounded-full text-2xl shadow-lg transition duration-300 ease-in-out transform hover:scale-105">
+                    5초 제한
+                </button>
+                <button id="start-10sec"
+                    class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-4 px-8 rounded-full text-2xl shadow-lg transition duration-300 ease-in-out transform hover:scale-105">
+                    10초 제한
+                </button>
+            </div>
+        </div>
+
+        <div id="game-screen" class="hidden">
+            <button id="restart-button"
+                class="absolute top-4 left-4 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-full text-sm shadow-md transition duration-200 ease-in-out">
+                재시작
+            </button>
+
+            <div class="text-gray-600 text-lg mb-2 mt-10">
+                몫을 만드는 두 숫자를 선택하세요!
+            </div>
+            <div id="timer-display" class="text-red-500 font-bold text-xl mb-4">
+                남은 시간: 5.00초
+            </div>
+
+            <div id="quotient-display"
+                class="bg-blue-500 text-white text-9xl font-extrabold py-8 rounded-2xl mb-8 shadow-inner border-b-8 border-blue-700">
+                0
+            </div>
+
+            <div id="number-buttons" class="grid grid-cols-4 gap-4 mb-8">
+                </div>
+
+            <div id="average-reaction-time-display" class="text-gray-700 text-xl font-semibold mt-4">
+                평균 반응 시간: 0.00초
+            </div>
+        </div>
+    </div>
+
+    <div id="feedback-dialog" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 hidden">
+        <div id="feedback-dialog-content" class="bg-white p-8 rounded-3xl shadow-2xl max-w-lg w-full text-center border-4 border-blue-400 animate-fade-in-up">
+            <h2 id="feedback-title" class="text-5xl font-extrabold mb-6"></h2>
+            <p id="feedback-text-main" class="text-3xl text-gray-700 mb-6"></p>
+            <p id="feedback-text-correct-answer" class="text-3xl text-gray-700 mb-6 hidden"></p>
+            <p class="text-xl text-gray-500">
+                다음 문제로 넘어갑니다...
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // DOM 요소 가져오기
+        const appContainer = document.getElementById('app-container');
+        const startScreen = document.getElementById('start-screen');
+        const gameScreen = document.getElementById('game-screen');
+        const start5SecButton = document.getElementById('start-5sec');
+        const start10SecButton = document.getElementById('start-10sec');
+        const restartButton = document.getElementById('restart-button');
+        const timerDisplay = document.getElementById('timer-display');
+        const quotientDisplay = document.getElementById('quotient-display');
+        const numberButtonsContainer = document.getElementById('number-buttons');
+        const averageReactionTimeDisplay = document.getElementById('average-reaction-time-display');
+        const feedbackDialog = document.getElementById('feedback-dialog');
+        const feedbackDialogContent = document.getElementById('feedback-dialog-content');
+        const feedbackTitle = document.getElementById('feedback-title');
+        const feedbackTextMain = document.getElementById('feedback-text-main');
+        const feedbackTextCorrectAnswer = document.getElementById('feedback-text-correct-answer');
+
+        // 게임 상태 변수
+        let currentQuotient = 0;
+        let allCorrectFactorPairs = [];
+        let selectedNumbers = [];
+        let reactionTimes = [];
+        let problemStartTime = 0;
+        let timerInterval = null;
+        let timeLeft = 0; // 밀리초 단위
+        let isWaitingForNextQuestion = false;
+        let selectedTimeLimit = 5000; // 기본 5초
+
+        // 숫자 버튼 생성 (2-9)
+        for (let i = 2; i <= 9; i++) {
+            const button = document.createElement('button');
+            button.textContent = i;
+            button.dataset.number = i;
+            button.className = `
+                w-full h-20 text-4xl font-bold rounded-xl shadow-md transition duration-200 ease-in-out
+                bg-blue-200 text-blue-800 hover:bg-blue-300 active:bg-blue-400 border-b-4 border-blue-400
+            `;
+            button.onclick = () => handleNumberClick(i);
+            numberButtonsContainer.appendChild(button);
+        }
+        const numberButtonElements = Array.from(numberButtonsContainer.children);
+
+
+        // 유효한 인수 쌍 계산 함수
+        function calculateFactorPairs(num) {
+            const pairs = new Set();
+            for (let i = 2; i <= Math.sqrt(num); i++) {
+                if (num % i === 0) {
+                    const factor1 = i;
+                    const factor2 = num / i;
+                    if (factor1 >= 2 && factor1 <= 9 && factor2 >= 2 && factor2 <= 9) {
+                        pairs.add(JSON.stringify([factor1, factor2].sort((a, b) => a - b)));
+                    }
+                }
+            }
+            return Array.from(pairs).map(pair => JSON.parse(pair));
+        }
+
+        // 새 문제 생성 함수
+        function generateProblem() {
+            if (isWaitingForNextQuestion) return; // 이미 다음 문제 대기 중이면 중복 실행 방지
+
+            let quotient;
+            let factors;
+            do {
+                const factor1 = Math.floor(Math.random() * 8) + 2;
+                const factor2 = Math.floor(Math.random() * 8) + 2;
+                quotient = factor1 * factor2;
+                factors = calculateFactorPairs(quotient);
+            } while (factors.length === 0);
+
+            currentQuotient = quotient;
+            allCorrectFactorPairs = factors;
+            selectedNumbers = [];
+            updateNumberButtonStates(); // 버튼 상태 초기화
+
+            quotientDisplay.textContent = currentQuotient;
+            feedbackDialog.classList.add('hidden');
+            isWaitingForNextQuestion = false;
+            problemStartTime = Date.now();
+            timeLeft = selectedTimeLimit;
+            updateTimerDisplay();
+            startTimer();
+        }
+
+        // 타이머 시작 함수
+        function startTimer() {
+            clearInterval(timerInterval); // 기존 타이머 정리
+            timerInterval = setInterval(() => {
+                timeLeft -= 10;
+                if (timeLeft <= 0) {
+                    timeLeft = 0;
+                    clearInterval(timerInterval);
+                    handleTimeUp();
+                }
+                updateTimerDisplay();
+            }, 10);
+        }
+
+        // 타이머 디스플레이 업데이트 함수
+        function updateTimerDisplay() {
+            timerDisplay.textContent = `남은 시간: ${(timeLeft / 1000).toFixed(2)}초`;
+        }
+
+        // 시간 초과 처리 함수
+        function handleTimeUp() {
+            if (isWaitingForNextQuestion) return; // 이미 처리 중이면 중복 방지
+            isWaitingForNextQuestion = true; // 입력 방지 플래그 설정
+
+            const exampleCorrectPair = allCorrectFactorPairs.length > 0 ? allCorrectFactorPairs[0] : [0, 0];
+            showFeedback(false, `시간 초과!`, `정답은 ${exampleCorrectPair[0]} x ${exampleCorrectPair[1]} 입니다.`);
+
+            setTimeout(() => {
+                isWaitingForNextQuestion = false; // 플래그 해제
+                generateProblem();
+            }, 2000);
+        }
+
+        // 숫자 버튼 클릭 처리 함수
+        function handleNumberClick(num) {
+            if (isWaitingForNextQuestion || selectedNumbers.length >= 2) {
+                return;
+            }
+
+            if (navigator.vibrate) {
+                navigator.vibrate(50);
+            }
+
+            selectedNumbers.push(num);
+            updateNumberButtonStates();
+
+            if (selectedNumbers.length === 2) {
+                clearInterval(timerInterval); // 즉시 타이머 중지
+                isWaitingForNextQuestion = true; // 입력 방지 플래그 설정
+
+                const sortedSelected = [...selectedNumbers].sort((a, b) => a - b);
+                const isAnswerCorrect = allCorrectFactorPairs.some(
+                    (pair) => pair[0] === sortedSelected[0] && pair[1] === sortedSelected[1]
+                );
+
+                const reactionTime = (Date.now() - problemStartTime) / 1000;
+                reactionTimes.push(reactionTime);
+                updateAverageReactionTime();
+
+                if (isAnswerCorrect) {
+                    showFeedback(true, `정답입니다!`, `${reactionTime.toFixed(2)}초 만에 답했습니다.`);
+                } else {
+                    const exampleCorrectPair = allCorrectFactorPairs.length > 0 ? allCorrectFactorPairs[0] : [0, 0];
+                    showFeedback(false, `오답입니다!`, `정답은 ${exampleCorrectPair[0]} x ${exampleCorrectPair[1]} 입니다.`);
+                }
+
+                setTimeout(() => {
+                    isWaitingForNextQuestion = false; // 플래그 해제
+                    generateProblem();
+                }, 2000);
+            }
+        }
+
+        // 숫자 버튼 상태 업데이트 함수
+        function updateNumberButtonStates() {
+            numberButtonElements.forEach(button => {
+                const num = parseInt(button.dataset.number);
+                const isSelected = selectedNumbers.includes(num);
+                const isDisabled = isWaitingForNextQuestion || selectedNumbers.length >= 2;
+
+                button.disabled = isDisabled;
+
+                if (isSelected) {
+                    button.className = `
+                        w-full h-20 text-4xl font-bold rounded-xl shadow-md transition duration-200 ease-in-out
+                        bg-blue-700 text-white transform scale-95 border-b-4 border-blue-900
+                        ${isDisabled && !selectedNumbers.includes(num) ? 'opacity-60 cursor-not-allowed' : ''}
+                    `;
+                } else {
+                     button.className = `
+                        w-full h-20 text-4xl font-bold rounded-xl shadow-md transition duration-200 ease-in-out
+                        bg-blue-200 text-blue-800 hover:bg-blue-300 active:bg-blue-400 border-b-4 border-blue-400
+                        ${isDisabled ? 'opacity-60 cursor-not-allowed' : ''}
+                    `;
+                }
+                 // 선택되지 않았지만 비활성화된 경우 (두 개 선택 완료 후)
+                if (isDisabled && !isSelected) {
+                    button.classList.add('opacity-60', 'cursor-not-allowed');
+                } else if (!isDisabled) {
+                     button.classList.remove('opacity-60', 'cursor-not-allowed');
+                }
+            });
+        }
+
+
+        // 평균 반응 시간 업데이트 함수
+        function updateAverageReactionTime() {
+            const average = reactionTimes.length > 0
+                ? (reactionTimes.reduce((sum, time) => sum + time, 0) / reactionTimes.length).toFixed(2)
+                : '0.00';
+            averageReactionTimeDisplay.textContent = `평균 반응 시간: ${average}초`;
+        }
+
+        // 피드백 다이얼로그 표시 함수
+        function showFeedback(isCorrect, title, mainText, correctAnswerText = null) {
+            feedbackTitle.textContent = title;
+            feedbackTitle.className = `text-5xl font-extrabold mb-6 ${isCorrect ? 'text-green-600' : 'text-red-600'}`;
+
+            feedbackTextMain.textContent = mainText;
+
+            if (correctAnswerText && !isCorrect) { // 오답일 때만 정답 안내 표시
+                feedbackTextCorrectAnswer.textContent = correctAnswerText;
+                feedbackTextCorrectAnswer.classList.remove('hidden');
+            } else {
+                feedbackTextCorrectAnswer.classList.add('hidden');
+            }
+            feedbackDialogContent.className = `bg-white p-8 rounded-3xl shadow-2xl max-w-lg w-full text-center border-4 ${isCorrect ? 'border-green-400' : 'border-red-400'} animate-fade-in-up`;
+            feedbackDialog.classList.remove('hidden');
+        }
+
+        // 키보드 입력 처리 함수
+        function handleKeyDown(event) {
+            if (gameScreen.classList.contains('hidden')) return; // 게임 화면이 아니면 무시
+            const num = parseInt(event.key, 10);
+            if (!isNaN(num) && num >= 2 && num <= 9) {
+                handleNumberClick(num);
+            }
+        }
+        window.addEventListener('keydown', handleKeyDown);
+
+        // 게임 시작 함수
+        function startGame(timeLimit) {
+            selectedTimeLimit = timeLimit;
+            startScreen.classList.add('hidden');
+            gameScreen.classList.remove('hidden');
+            reactionTimes = []; // 새 게임 시작 시 반응 시간 초기화
+            updateAverageReactionTime(); // 평균 반응 시간 표시 초기화
+            generateProblem();
+        }
+
+        // 메인 화면으로 돌아가는 함수 (재시작)
+        function goToMainScreen() {
+            clearInterval(timerInterval);
+            gameScreen.classList.add('hidden');
+            startScreen.classList.remove('hidden');
+            feedbackDialog.classList.add('hidden');
+
+            // 상태 초기화
+            currentQuotient = 0;
+            allCorrectFactorPairs = [];
+            selectedNumbers = [];
+            // reactionTimes는 재시작 시 초기화되도록 startGame에서 처리
+            problemStartTime = 0;
+            timeLeft = 0;
+            isWaitingForNextQuestion = false;
+            selectedTimeLimit = 5000; // 기본값으로 리셋
+            quotientDisplay.textContent = '0';
+            updateTimerDisplay();
+            updateAverageReactionTime(); // 평균 반응 시간 표시 초기화
+            updateNumberButtonStates(); // 버튼 상태 초기화
+        }
+
+        // 이벤트 리스너 연결
+        start5SecButton.onclick = () => startGame(5000);
+        start10SecButton.onclick = () => startGame(10000);
+        restartButton.onclick = goToMainScreen;
+
+    </script>
+</body>
+</html>
