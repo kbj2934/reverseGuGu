@@ -1,6 +1,6 @@
 # reverseGuGu
 초등학교 3학년 4. 나눗셈 단원에서 곱셈과 나눗셈의 관계를 연습할 수 있도록 제작한 역구구단 앱입니다.
-Google Gemini 2.5 Pro(무료버전)을 활용해서 제작했습니다.
+Google Gemini 2.5 Pro(무료버전)을 활용해서 제작했습니다.    
 https://kbj2934.github.io/reverseGuGu/
 
 # 제작과정
